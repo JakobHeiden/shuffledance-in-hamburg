@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamburg Shuffle</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hamburg Shuffle</h1>
+            <p class="tagline">Shuffle Dance für Jedermann</p>
+        </header>
+
+        <nav class="nav-buttons">
+            <button class="nav-btn active" onclick="showSection('welcome')">Willkommen</button>
+            <button class="nav-btn" onclick="showSection('meet')">Nächstes Treffen</button>
+        </nav>
+
+        <main>
+            <section id="welcome" class="content-section active">
+                <h2>Moin.</h2>
+                <p>Wir sind eine kleine Gruppe an hamburger Shufflern, die sich regelmäßig zum gemeinsamen Üben und Tanzen treffen. Diese Webseite dient dazu, unsere Treffen zu organisieren, und Interessenten den Weg zu uns zu weisen.</p>
+                <p>Wir sind kein Kurs und kein Workshop, wir lernen von- und miteinander. Jeder ist willkommen! Vorkenntnisse sind nicht erforderlich. Wenn du neu bei uns bist, zeigen wir dir natürlich gern die ersten Schritte.</p>
+                <p>Wir treffen uns in aller Regel sonntags um 15 Uhr an der Hafencity Universität an der Ecke Henning-Voscherau-Platz und Versmannkai, also mit Blick direkt aufs Wasser. Spätestens wenn wir Musik anmachen sind wir nicht zu verfehlen.</p>
+                <p>Du möchtest mitmachen? Meld dich unter "Nächstes Treffen" an und schreib uns am besten auch eine <a href="mailto:shuffle.hamburg@gmx.de">Email</a>. Wir freuen uns immer über neue Gesichter!</p>
+            </section>
+
+            <section id="meet" class="content-section">
+                <h2>Nächstes Treffen</h2>
+                <p><strong>Sonntag, 19. Januar 2025 um 15:00 Uhr</strong></p>
+                <p>Ort: HafenCity Universität (Ecke Henning-Voscherau-Platz und Versmannkai)</p>
+                
+                <div class="signup-section">
+                    <h3>Anmeldung</h3>
+                    <p>Trag dich hier ein, damit wir wissen, wer kommt:</p>
+                    
+                    <form id="signupForm" action="/signup" method="POST" class="signup-form">
+                        <div class="form-group">
+                            <input type="text" id="name" name="name" placeholder="Dein Name" required maxlength="50">
+                            <button type="submit">Anmelden</button>
+                        </div>
+                    </form>
+                    
+                    <div id="message" class="message"></div>
+                </div>
+
+                <div class="attendees-section">
+                    <h3>Angemeldet (<span id="attendeeCount">0</span>)</h3>
+                    <div id="attendeeList" class="attendee-list">
+                        <p class="loading">Lade Teilnehmerliste...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function showSection(sectionName) {
+            // Hide all sections
+            const sections = document.querySelectorAll('.content-section');
+            sections.forEach(section => section.classList.remove('active'));
+            
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.nav-btn');
+            buttons.forEach(button => button.classList.remove('active'));
+            
+            // Show selected section
+            document.getElementById(sectionName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Load attendees when meet section is shown
+            if (sectionName === 'meet') {
+                loadAttendees();
+            }
+        }
+
+        // Handle form submission
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const nameInput = document.getElementById('name');
+            const name = nameInput.value.trim();
+            const messageDiv = document.getElementById('message');
+            
+            if (name === '') {
+                showMessage('Bitte gib deinen Namen ein.', 'error');
+                return;
+            }
+            
+            // Submit the form
+            fetch('/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'name=' + encodeURIComponent(name)
+            })
+            .then(response => response.text())
+            .then(data => {
+                if (data.includes('SUCCESS')) {
+                    showMessage('Anmeldung erfolgreich! Wir freuen uns auf dich.', 'success');
+                    nameInput.value = '';
+                    loadAttendees(); // Refresh the list
+                } else if (data.includes('DUPLICATE')) {
+                    showMessage('Du bist bereits angemeldet!', 'warning');
+                } else {
+                    showMessage('Fehler bei der Anmeldung. Bitte versuche es nochmal.', 'error');
+                }
+            })
+            .catch(error => {
+                showMessage('Verbindungsfehler. Bitte versuche es nochmal.', 'error');
+            });
+        });
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = 'message ' + type;
+            
+            // Clear message after 5 seconds
+            setTimeout(() => {
+                messageDiv.textContent = '';
+                messageDiv.className = 'message';
+            }, 5000);
+        }
+
+        function loadAttendees() {
+            fetch('/attendees')
+                .then(response => response.text())
+                .then(data => {
+                    const attendeeList = document.getElementById('attendeeList');
+                    const attendeeCount = document.getElementById('attendeeCount');
+                    
+                    if (data.trim() === '') {
+                        attendeeList.innerHTML = '<p class="no-attendees">Noch keine Anmeldungen</p>';
+                        attendeeCount.textContent = '0';
+                    } else {
+                        const names = data.trim().split('\n').filter(name => name.trim() !== '');
+                        attendeeCount.textContent = names.length;
+                        
+                        const nameElements = names.map(name => 
+                            `<span class="attendee-name">${name.trim()}</span>`
+                        ).join('');
+                        
+                        attendeeList.innerHTML = nameElements;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('attendeeList').innerHTML = 
+                        '<p class="error">Fehler beim Laden der Liste</p>';
+                });
+        }
+
+        // Load attendees when page loads if we're on the meet section
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('meet').classList.contains('active')) {
+                loadAttendees();
+            }
+        });
+    </script>
+</body>
+</html>
