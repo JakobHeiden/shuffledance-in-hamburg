@@ -65,11 +65,13 @@ void loop() {
 
   // Read the first line of the request
   String requestLine = client.readStringUntil('\n');
-  Serial.println("Request: " + requestLine);
+  Serial.print(F("Request: "));
+  Serial.println(requestLine);
 
   // Extract the requested file path
   String filePath = getRequestedFile(requestLine);
-  Serial.println("Requested file: " + filePath);
+  Serial.print(F("Requested file: "));
+  Serial.println(filePath);
 
   // Ignore the rest of the request headers
   while (client.available()) {
@@ -104,19 +106,23 @@ String getRequestedFile(String requestLine) {
 }
 
 void serveFile(EthernetClient &client, String filename) {
-  Serial.println("Attempting to open: " + filename);
+  Serial.print(F("Attempting to open: "));
+  Serial.println(filename);
 
   File file = SD.open(filename);
 
   // Guard clause: handle file not found early
   if (!file) {
-    Serial.println("File not found: " + filename);
+    Serial.print(F("File not found: "));
+    Serial.println(filename);
     client.println(F("HTTP/1.1 404 Not Found"));
     client.println(F("Content-Type: text/html"));
     client.println(F("Connection: close"));
     client.println();
     client.println(F("<h1>404 - File Not Found</h1>"));
-    client.println("<p>The file '" + filename + "' was not found on the server.</p>");
+    client.print(F("<p>The file '"));
+    client.print(filename);
+    client.println(F("' was not found on the server.</p>"));
     return;
   }
 
