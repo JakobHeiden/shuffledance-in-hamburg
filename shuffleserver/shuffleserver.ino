@@ -63,21 +63,80 @@ void loop() {
 
   // Read the first line of the request
   String requestLine = client.readStringUntil('\n');
+  // Extract HTTP method (GET, POST, etc.)
+  String method = requestLine.substring(0, requestLine.indexOf(' '));
+  Serial.print(F("Method: "));
+  Serial.println(method);
+
   Serial.print(F("Request: "));
   Serial.println(requestLine);
 
-  // Extract the requested file path
-  String filePath = getRequestedFile(requestLine);
-  Serial.print(F("Requested file: "));
-  Serial.println(filePath);
+  if (method == F("POST")) {
+    Serial.println(F("Handling POST request"));
 
-  // Ignore the rest of the request headers
-  while (client.available()) {
-    client.readStringUntil('\n');
+    // Skip headers until we find the empty line
+    String line;
+    do {
+      line = client.readStringUntil('\n');
+      line.trim();
+    } while (line.length() > 0);
+
+    // Read POST body (form data)
+    String postData = client.readString();
+    Serial.print(F("POST data: "));
+    Serial.println(postData);
+
+    // Parse name from postData (format: "name=encoded_value")
+    String name = "";
+    if (postData.startsWith("name=")) {
+      name = postData.substring(5); // Skip "name="
+      name = urlDecode(name);
+      Serial.print(F("Decoded name: "));
+      Serial.println(name);
+    }
+
+    if (name.length() == 0) {
+      // Empty name - send error
+      client.println(F("ERROR: Empty name"));
+      return;
+    }
+
+    // Try to open signups file for writing (append mode)
+    File signupsFile = SD.open("SIGNUP.TXT", FILE_WRITE);
+    if (!signupsFile) {
+      Serial.println(F("Failed to open signups file!"));
+      client.println(F("ERROR: File access failed"));
+      return;
+    }
+
+    // Write the name to file (one per line)
+    signupsFile.println(name);
+    signupsFile.close();
+
+    Serial.print(F("Saved signup: "));
+    Serial.println(name);
+
+    // Success response
+    client.println(F("HTTP/1.1 200 OK"));
+    client.println(F("Content-Type: text/plain"));
+    client.println(F("Connection: close"));
+    client.println();
+    client.println(F("SUCCESS"));
+
+    // TODO: Check for duplicates
+  } else {
+    // Handle GET requests (serve files)
+    String filePath = getRequestedFile(requestLine);
+    Serial.print(F("Requested file: "));
+    Serial.println(filePath);
+
+    // Ignore the rest of the request headers
+    while (client.available()) {
+      client.readStringUntil('\n');
+    }
+
+    serveFile(client, filePath);
   }
-
-  // Try to serve the file
-  serveFile(client, filePath);
 
   client.stop();
   Serial.println(F("=== CLIENT DISCONNECTED ==="));
@@ -95,6 +154,10 @@ String getRequestedFile(String requestLine) {
     path = F("/INDEX.HTM");
   }
 
+  if (path = F("/signup")) {
+    path = F("/SIGNUP.TXT");
+  }
+
   // Remove the leading slash for SD card
   if (path.startsWith("/")) {
     path = path.substring(1);
@@ -103,7 +166,7 @@ String getRequestedFile(String requestLine) {
   return path;
 }
 
-void serveFile(EthernetClient &client, String filename) {
+void serveFile(EthernetClient& client, String filename) {
   Serial.print(F("Attempting to open: "));
   Serial.println(filename);
 
@@ -157,10 +220,9 @@ void display_freeram() {
 }
 
 int freeRam() {
-  extern int __heap_start,*__brkval;
+  extern int __heap_start, *__brkval;
   int v;
-  return (int)&v - (__brkval == 0  
-    ? (int)&__heap_start : (int) __brkval);  
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
 }
 
 void listFiles() {
@@ -168,7 +230,7 @@ void listFiles() {
   while (true) {
     File entry = root.openNextFile();
     if (!entry) break;
-    
+
     Serial.print("Found file: '");
     Serial.print(entry.name());
     Serial.print("' size: ");
@@ -176,4 +238,22 @@ void listFiles() {
     entry.close();
   }
   root.close();
+}
+
+String urlDecode(String input) {
+  String output = "";
+  for (int i = 0; i < input.length(); i++) {
+    if (input[i] == '%' && i + 2 < input.length()) {
+      // Convert hex to character
+      String hex = input.substring(i + 1, i + 3);
+      char c = (char)strtol(hex.c_str(), NULL, 16);
+      output += c;
+      i += 2; // Skip the hex digits
+    } else if (input[i] == '+') {
+      output += ' '; // + becomes space
+    } else {
+      output += input[i];
+    }
+  }
+  return output;
 }

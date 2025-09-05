@@ -129,7 +129,7 @@
         }
 
         function loadAttendees() {
-            fetch('/attendees')
+            fetch('/signup')
                 .then(response => response.text())
                 .then(data => {
                     const attendeeList = document.getElementById('attendeeList');
