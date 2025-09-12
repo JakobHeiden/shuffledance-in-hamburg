@@ -25,6 +25,11 @@ void setup() {
     while (1)
       ;
   }
+  if (!SD.exists("SIGNUP.TXT")) {
+    File signupsFile = SD.open("SIGNUP.TXT", FILE_WRITE);
+    signupsFile.close();
+    Serial.println(F("Created empty SIGNUP.TXT"));
+  }
 
 
   // Start Ethernet
@@ -154,7 +159,7 @@ String getRequestedFile(String requestLine) {
     path = F("/INDEX.HTM");
   }
 
-  if (path = F("/signup")) {
+  if (path == F("/signup")) {
     path = F("/SIGNUP.TXT");
   }
 

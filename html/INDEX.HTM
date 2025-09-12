@@ -42,6 +42,8 @@
                             <button type="submit">Anmelden</button>
                         </div>
                     </form>
+
+                    <p>Wir speichern deinen Namen auf deinem Gerät, damit du ihn nicht jedes Mal eingeben musst.</p>
                     
                     <div id="message" class="message"></div>
                 </div>
@@ -102,6 +104,7 @@
             .then(response => response.text())
             .then(data => {
                 if (data.includes('SUCCESS')) {
+                    localStorage.setItem('userName', name);
                     showMessage('Anmeldung erfolgreich! Wir freuen uns auf dich.', 'success');
                     nameInput.value = '';
                     loadAttendees(); // Refresh the list
@@ -156,11 +159,17 @@
         }
 
         // Load attendees when page loads if we're on the meet section
-        document.addEventListener('DOMContentLoaded', function() {
-            if (document.getElementById('meet').classList.contains('active')) {
-                loadAttendees();
-            }
-        });
+	document.addEventListener('DOMContentLoaded', function() {
+	    if (document.getElementById('meet').classList.contains('active')) {
+		loadAttendees();
+	    }
+	    
+	    // Pre-fill name from localStorage
+	    const savedName = localStorage.getItem('userName');
+	    if (savedName) {
+		document.getElementById('name').value = savedName;
+	    }
+	});
     </script>
 </body>
 </html>
