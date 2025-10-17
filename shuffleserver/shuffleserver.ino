@@ -25,12 +25,6 @@ void setup() {
     while (1)
       ;
   }
-  if (!SD.exists("SIGNUP.TXT")) {
-    File signupsFile = SD.open("SIGNUP.TXT", FILE_WRITE);
-    signupsFile.close();
-    Serial.println(F("Created empty SIGNUP.TXT"));
-  }
-
 
   // Start Ethernet
   if (Ethernet.begin(mac) == 0) {
@@ -52,9 +46,7 @@ void loop() {
   }
 
   Serial.println(F("=== NEW CLIENT ==="));
-
-  // Wait for request to arrive
-  unsigned long timeoutAt = millis() + 3000;  // 3 second timeout
+  unsigned long timeoutAt = millis() + 3000;
   while (client.connected() && !client.available() && millis() < timeoutAt) {
     delay(1);
   }
@@ -66,101 +58,96 @@ void loop() {
     return;
   }
 
-  // Read the first line of the request
   String requestLine = client.readStringUntil('\n');
-  // Extract HTTP method (GET, POST, etc.)
   String method = requestLine.substring(0, requestLine.indexOf(' '));
-  Serial.print(F("Method: "));
-  Serial.println(method);
-
   Serial.print(F("Request: "));
   Serial.println(requestLine);
 
   if (method == F("POST")) {
-    Serial.println(F("Handling POST request"));
-
-    // Skip headers until we find the empty line
-    String line;
-    do {
-      line = client.readStringUntil('\n');
-      line.trim();
-    } while (line.length() > 0);
-
-    // Read POST body (form data)
-    String postData = client.readString();
-    Serial.print(F("POST data: "));
-    Serial.println(postData);
-
-    // Parse name from postData (format: "name=encoded_value")
-    String name = "";
-    if (postData.startsWith("name=")) {
-      name = postData.substring(5); // Skip "name="
-      name = urlDecode(name);
-      Serial.print(F("Decoded name: "));
-      Serial.println(name);
-    }
-
-    if (name.length() == 0) {
-      // Empty name - send error
-      client.println(F("ERROR: Empty name"));
-      return;
-    }
-
-    // Try to open signups file for writing (append mode)
-    File signupsFile = SD.open("SIGNUP.TXT", FILE_WRITE);
-    if (!signupsFile) {
-      Serial.println(F("Failed to open signups file!"));
-      client.println(F("ERROR: File access failed"));
-      return;
-    }
-
-    // Write the name to file (one per line)
-    signupsFile.println(name);
-    signupsFile.close();
-
-    Serial.print(F("Saved signup: "));
-    Serial.println(name);
-
-    // Success response
-    client.println(F("HTTP/1.1 200 OK"));
-    client.println(F("Content-Type: text/plain"));
-    client.println(F("Connection: close"));
-    client.println();
-    client.println(F("SUCCESS"));
-
-    // TODO: Check for duplicates
+    handlePOST(client);
   } else {
-    // Handle GET requests (serve files)
-    String filePath = getRequestedFile(requestLine);
-    Serial.print(F("Requested file: "));
-    Serial.println(filePath);
-
-    // Ignore the rest of the request headers
-    while (client.available()) {
-      client.readStringUntil('\n');
-    }
-
-    serveFile(client, filePath);
+    handleGET(client, requestLine);
   }
-
   client.stop();
   Serial.println(F("=== CLIENT DISCONNECTED ==="));
 }
 
-String getRequestedFile(String requestLine) {
-  // HTTP request looks like: "GET /style.css HTTP/1.1"
-  int startPos = requestLine.indexOf(' ') + 1;
-  int endPos = requestLine.indexOf(' ', startPos);
+void handlePOST(EthernetClient& client) {
+  // Skip headers until we find the empty line
+  String line;
+  do {
+    line = client.readStringUntil('\n');
+    line.trim();
+  } while (line.length() > 0);
 
-  String path = requestLine.substring(startPos, endPos);
+  String postData = client.readString();
+  Serial.print(F("POST data: "));
+  Serial.println(postData);
+  int firstAmpersand = postData.indexOf('&');
+  String name = postData.substring(5, firstAmpersand);                             // cut off "name="
+  String status = postData.substring(firstAmpersand + 8, postData.length() - 16);  // cut off "&status=" and "&sunday=YYYYMMDD"
+  String sunday = postData.substring(postData.length() - 8);                       // sunday is YYYYMMDD
+  Serial.print(F("Decoded postData: "));
+  Serial.print(name);
+  Serial.print(F(","));
+  Serial.print(status);
+  Serial.print(F(","));
+  Serial.println(sunday);
 
-  // If they request "/", serve "index.html"
+  File signupsFile = SD.open(sunday + ".TXT", FILE_WRITE);
+  if (!signupsFile) handleError(F("Failed to open signups file!"));
+
+  signupsFile.print(name);
+  signupsFile.print(F(","));
+  signupsFile.println(status);
+  signupsFile.close();
+
+  Serial.print(F("Saved signup: "));
+  Serial.print(name);
+  Serial.print(F(","));
+  Serial.print(status);
+  Serial.print(F(" to "));
+  Serial.println(signupsFile.name());
+
+  client.println(F("HTTP/1.1 200 OK"));
+  client.println(F("Content-Type: text/plain"));
+  client.println(F("Connection: close"));
+  client.println();
+  client.println(F("SUCCESS"));
+}
+
+void handleGET(EthernetClient& client, const String& requestLine) {
+  String filePath = filePathOf(requestLine);
+  Serial.print(F("Requested file: "));
+  Serial.println(filePath);
+
+  while (client.available()) {
+    client.readStringUntil('\n');
+  }
+
+  serveFile(client, filePath);
+}
+
+String filePathOf(String requestLine) {
+  int URIstart = requestLine.indexOf(' ') + 1;
+  int URIend = requestLine.indexOf(' ', URIstart);
+  int ampersand = requestLine.indexOf('?');
+  String path = "";
+  String sunday = "";
+  if (ampersand == -1) {
+    path = requestLine.substring(URIstart, URIend);
+    sunday = F("00000000");
+  } else {
+    path = requestLine.substring(URIstart, ampersand);
+    sunday = requestLine.substring(ampersand + 8, URIend);
+  }
+
   if (path == F("/")) {
     path = F("/INDEX.HTM");
   }
 
   if (path == F("/signup")) {
-    path = F("/SIGNUP.TXT");
+    path = "/" + sunday + F(".TXT");
   }
 
   // Remove the leading slash for SD card
@@ -168,6 +155,8 @@ String getRequestedFile(String requestLine) {
     path = path.substring(1);
   }
 
+  Serial.print(F("path: "));
+  Serial.println(path);
   return path;
 }
 
@@ -181,6 +170,15 @@ void serveFile(EthernetClient& client, String filename) {
   if (!file) {
     Serial.print(F("File not found: "));
     Serial.println(filename);
+    if (filename.endsWith(F(".TXT"))) {
+      Serial.println(F("serving empty file"));
+      client.println(F("HTTP/1.1 200 OK"));
+      client.println(F("Content-Type: text/plain"));
+      client.println(F("Connection: close"));
+      client.println();
+      file.close();
+      return;
+    }
     client.println(F("HTTP/1.1 404 Not Found"));
     client.println(F("Content-Type: text/html"));
     client.println(F("Connection: close"));
@@ -208,7 +206,7 @@ void serveFile(EthernetClient& client, String filename) {
   }
 
   client.println(F("Connection: close"));
-  client.println();  // Empty line required!
+  client.println();
 
   // Send file contents
   while (file.available()) {
@@ -219,15 +217,22 @@ void serveFile(EthernetClient& client, String filename) {
   Serial.println(F("File served successfully"));
 }
 
-void display_freeram() {
-  Serial.print(F("- SRAM left: "));
-  Serial.println(freeRam());
-}
-
-int freeRam() {
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+String urlDecode(String input) {
+  String output = "";
+  for (int i = 0; i < input.length(); i++) {
+    if (input[i] == '%' && i + 2 < input.length()) {
+      // Convert hex to character
+      String hex = input.substring(i + 1, i + 3);
+      char c = (char)strtol(hex.c_str(), NULL, 16);
+      output += c;
+      i += 2;  // Skip the hex digits
+    } else if (input[i] == '+') {
+      output += ' ';  // + becomes space
+    } else {
+      output += input[i];
+    }
+  }
+  return output;
 }
 
 void listFiles() {
@@ -245,20 +250,24 @@ void listFiles() {
   root.close();
 }
 
-String urlDecode(String input) {
-  String output = "";
-  for (int i = 0; i < input.length(); i++) {
-    if (input[i] == '%' && i + 2 < input.length()) {
-      // Convert hex to character
-      String hex = input.substring(i + 1, i + 3);
-      char c = (char)strtol(hex.c_str(), NULL, 16);
-      output += c;
-      i += 2; // Skip the hex digits
-    } else if (input[i] == '+') {
-      output += ' '; // + becomes space
-    } else {
-      output += input[i];
-    }
-  }
-  return output;
+void display_freeram() {
+  Serial.print(F("- SRAM left: "));
+  Serial.println(freeRam());
+}
+
+int freeRam() {
+  extern int __heap_start, *__brkval;
+  int v;
+  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+}
+
+void handleError(const EthernetClient& client, const __FlashStringHelper* message) {
+  handleError(message);
+  client.print(F("Error: "));
+  client.println(message);
+}
+
+void handleError(const __FlashStringHelper* message) {
+  Serial.print(F("Error: "));
+  Serial.println(message);
 }

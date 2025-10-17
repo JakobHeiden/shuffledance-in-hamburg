@@ -94,7 +94,28 @@ h1 {
     margin-bottom: 15px;
     font-size: 1.1em;
 }
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
 
+.status-btn {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.status-btn.selected {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
 /* Signup form styles */
 .signup-section {
     background: #f8f9ff;
@@ -150,6 +171,33 @@ h1 {
 
 .form-group button:hover {
     background: #5a67d8;
+}
+
+.signup-btn {
+    padding: 12px 24px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.signup-btn.status-ja {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.signup-btn.status-vielleicht {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.signup-btn.status-nein {
+    background: #e9ecef;
+    border-color: #6c757d;
+    color: #495057;
 }
 
 /* Message styles */
@@ -211,6 +259,24 @@ h1 {
     font-size: 14px;
 }
 
+.attendee-name.status-ja {
+    background: #d4edda;
+    border: 2px solid #28a745;
+    color: #155724;
+}
+
+.attendee-name.status-vielleicht {
+    background: #fff3cd;
+    border: 2px solid #ffc107;
+    color: #856404;
+}
+
+.attendee-name.status-nein {
+    background: #e9ecef;
+    border: 2px solid #6c757d;
+    color: #495057;
+}
+
 .no-attendees {
     color: #666;
     font-style: italic;
@@ -231,6 +297,21 @@ a {
 
 a:hover {
     text-decoration: underline;
+}
+
+.radio-group {
+    margin: 15px 0;
+}
+
+.radio-group label {
+    display: block;
+    margin: 8px 0;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.radio-group input[type="radio"] {
+    margin-right: 8px;
 }
 
 /* Mobile responsiveness */
