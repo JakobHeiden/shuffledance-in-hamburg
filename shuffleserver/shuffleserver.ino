@@ -1,15 +1,17 @@
 #include <Ethernet.h>
 #include <SD.h>
+#include <avr/wdt.h>
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 EthernetServer server(80);
+unsigned long lastHealthCheck = 0;
 
 void setup() {
   Serial.begin(9600);
   Serial.println(F("\n\n\n========================================"));
   Serial.println(F("      ARDUINO WEB SERVER RESTART"));
   Serial.println(F("========================================"));
-  display_freeram();
+  displayFreeram();
 
   // Initialize SD card first
   Serial.print(F("Initializing SD card..."));
@@ -37,15 +39,27 @@ void setup() {
   Serial.print(F("Server started at: "));
   Serial.println(Ethernet.localIP());
   Serial.print(F("\n"));
+
+  wdt_enable(WDTO_8S);
 }
 
 void loop() {
+  wdt_reset();
+
+  if (millis() > lastHealthCheck + 16000) {
+    if (!checkEthernetHealth()) {
+      while (1);
+    }
+    lastHealthCheck = millis();
+  }
+  
   EthernetClient client = server.available();
   if (!client) {
     return;
   }
 
   Serial.println(F("=== NEW CLIENT ==="));
+  displayFreeram();
   unsigned long timeoutAt = millis() + 3000;
   while (client.connected() && !client.available() && millis() < timeoutAt) {
     delay(1);
@@ -58,7 +72,7 @@ void loop() {
     return;
   }
 
-  String requestLine = client.readStringUntil('\n');
+  String requestLine = readLineSafely(client);
   String method = requestLine.substring(0, requestLine.indexOf(' '));
   Serial.print(F("Request: "));
   Serial.println(requestLine);
@@ -73,18 +87,13 @@ void loop() {
 }
 
 void handlePOST(EthernetClient& client) {
-  // Skip headers until we find the empty line
-  String line;
-  do {
-    line = client.readStringUntil('\n');
-    line.trim();
-  } while (line.length() > 0);
+  skipHeaders(client);
 
-  String postData = client.readString();
+  String postData = readStringSafely(client);
   Serial.print(F("POST data: "));
   Serial.println(postData);
   int firstAmpersand = postData.indexOf('&');
-  String name = postData.substring(5, firstAmpersand);                             // cut off "name="
+  String name = urlDecode(postData.substring(5, firstAmpersand));                  // cut off "name="
   String status = postData.substring(firstAmpersand + 8, postData.length() - 16);  // cut off "&status=" and "&sunday=YYYYMMDD"
   String sunday = postData.substring(postData.length() - 8);                       // sunday is YYYYMMDD
   Serial.print(F("Decoded postData: "));
@@ -94,9 +103,16 @@ void handlePOST(EthernetClient& client) {
   Serial.print(F(","));
   Serial.println(sunday);
 
+  if (!isValidDate(sunday)) {
+    handleError(F("invalid date"));
+    return;
+  }
   File signupsFile = SD.open(sunday + ".TXT", FILE_WRITE);
-  if (!signupsFile) handleError(F("Failed to open signups file!"));
-
+  if (!signupsFile) {
+    handleError(F("Failed to open signups file"));
+    return;
+  }
+  
   signupsFile.print(name);
   signupsFile.print(F(","));
   signupsFile.println(status);
@@ -122,10 +138,71 @@ void handleGET(EthernetClient& client, const String& requestLine) {
   Serial.println(filePath);
 
   while (client.available()) {
-    client.readStringUntil('\n');
+    readLineSafely(client);
   }
 
   serveFile(client, filePath);
+}
+
+void skipHeaders(EthernetClient& client) {
+    while (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+            if (client.peek() == '\r') client.read();
+            if (client.peek() == '\n') {
+                client.read();
+                break;
+            }
+        }
+    }
+}
+
+String readLineSafely(EthernetClient& client) {
+    char buffer[200];
+    int i = 0;
+  
+    while (client.available() && i < 199) {
+        char c = client.read();
+        if (c == '\n') break;
+        buffer[i++] = c;
+    }
+    buffer[i] = '\0';
+    
+    if (i == 199) {
+        Serial.println(F("Line too long, truncated"));
+    }
+    
+    return String(buffer);
+}
+
+String readStringSafely(EthernetClient& client) {
+    char buffer[200];
+    int i = 0;
+    
+    while (client.available() && i < 199) {
+        buffer[i++] = client.read();
+    }
+    buffer[i] = '\0';
+  
+    if (i == 199) {
+      Serial.println(F("String too long, truncated"));
+    }
+
+    return String(buffer);
+}
+
+bool isValidDate(const String& date) {
+    if (date.length() != 8) {
+        return false;
+    }
+    
+    for (int i = 0; i < 8; i++) {
+        if (!isDigit(date[i])) {
+            return false;
+        }
+    }
+    
+    return true;
 }
 
 String filePathOf(String requestLine) {
@@ -176,7 +253,6 @@ void serveFile(EthernetClient& client, String filename) {
       client.println(F("Content-Type: text/plain"));
       client.println(F("Connection: close"));
       client.println();
-      file.close();
       return;
     }
     client.println(F("HTTP/1.1 404 Not Found"));
@@ -217,6 +293,15 @@ void serveFile(EthernetClient& client, String filename) {
   Serial.println(F("File served successfully"));
 }
 
+bool checkEthernetHealth() {
+    EthernetClient testClient;
+    if (testClient.connect(IPAddress(192, 168, 178, 1), 80)) {
+        testClient.stop();
+        return true;
+    }
+    return false;
+}
+
 String urlDecode(String input) {
   String output = "";
   for (int i = 0; i < input.length(); i++) {
@@ -250,15 +335,12 @@ void listFiles() {
   root.close();
 }
 
-void display_freeram() {
-  Serial.print(F("- SRAM left: "));
-  Serial.println(freeRam());
-}
-
-int freeRam() {
+void displayFreeram() {
   extern int __heap_start, *__brkval;
   int v;
-  return (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+  int freeRam = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+  Serial.print(F("- SRAM left: "));
+  Serial.println(freeRam);
 }
 
 void handleError(const EthernetClient& client, const __FlashStringHelper* message) {
