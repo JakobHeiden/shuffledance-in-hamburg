@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="de">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Wir schaffen Shuffle</title>
+      <link rel="stylesheet" href="style.css">
+   </head>
+   <body>
+      <div class="container">
+         <header>
+            <h1>Shuffledance in Hamburg</h1>
+            <p class="tagline">Wir schaffen Shuffle</p>
+         </header>
+
+         <nav class="nav-buttons">
+            <button id="welcome-btn" class="nav-btn active" onclick="showSection('welcome')">Willkommen</button>
+            <button id="meet-btn" class="nav-btn" onclick="showSection('meet')">Nächstes Treffen</button>
+         </nav>
+
+         <main>
+            <section id="welcome" class="content-section active">
+               <h2>Moin.</h2>
+               <p>Wir sind eine Gruppe an hamburger Shufflern, die sich regelmäßig zum gemeinsamen Üben und Tanzen treffen. Diese Webseite dient dazu, unsere Treffen zu organisieren, und Interessierten den Weg zu uns zu weisen.</p>
+               <p>Wir sind kein Kurs und kein Workshop, wir lernen von- und miteinander, umsonst und draussen. Jeder ist willkommen! Vorkenntnisse sind nicht erforderlich. Wir zeigen dir gern die ersten Schritte!</p>
+               <p>Wir treffen uns in aller Regel sonntags um 14 Uhr an der Hafencity Universität.</p>
+               <p>Du möchtest mitmachen? Meld dich unter "Nächstes Treffen" an und schreib uns vielleicht auch eine <a href="mailto:shuffle.hamburg@gmx.de">Email</a>. Wir freuen uns immer über neue Gesichter!</p>
+            </section>
+
+            <section id="meet" class="content-section">
+               <h2>Nächstes Treffen</h2>
+               <p><strong>Sonntag, </strong><strong id="date">...</strong><strong> um 14:00 Uhr</strong></p>
+               <p>Ort: <a href="https://maps.app.goo.gl/Godqq6EcMs6cPvqp9">HafenCity Universität vor der Mensa</a> (Ecke Henning-Voscherau-Platz und Versmannkai)</p>
+               <p>Du brauchst Schuhe in denen du Halt hast, idealerweise mit eher glatter Sohle, und genug zu trinken!</p>
+               <div class="attendees-section">
+                  <h3>Anmeldung</h3>
+                  <p>Trag dich hier ein, damit wir wissen wer kommt:</p>
+
+                  <div class="form-group">
+                     <input type="text" id="name" name="name" placeholder="Dein Name" required maxlength="50">
+                  </div>
+
+                  <p>Ich komme...</p>
+                  <div class="button-group">
+                     <button type="button" class="signup-btn status-ja" data-status="ja">ganz sicher</button>
+                     <button type="button" class="signup-btn status-vielleicht" data-status="vielleicht">vielleicht</button>
+                     <button type="button" class="signup-btn status-nein" data-status="nein">diesmal nicht</button>
+                  </div>
+
+                  <div id="message" class="message"></div>
+                  <div id="attendeeList" class="attendee-list">
+                     <p class="loading">Lade Teilnehmerliste...</p>
+                  </div>
+               </div>
+            </section>
+         </main>
+
+         <script>
+            function showSection(sectionName) {
+               // Hide all sections
+               const sections = document.querySelectorAll('.content-section');
+               sections.forEach(section => section.classList.remove('active'));
+
+               // Show selected section
+               document.getElementById(sectionName).classList.add('active');
+
+               if (sectionName === 'meet') {
+                  document.getElementById('meet-btn').classList.add('active');
+                  document.getElementById('welcome-btn').classList.remove('active');
+                  loadData();
+               }
+               if (sectionName === 'welcome') {
+                  document.getElementById('meet-btn').classList.remove('active');
+                  document.getElementById('welcome-btn').classList.add('active');
+               }
+            }
+
+            // Handle signup button clicks
+            document.querySelectorAll('.signup-btn').forEach(btn => {
+               btn.addEventListener('click', async function() {
+                  const name = document.getElementById('name').value.trim();
+                  const status = this.dataset.status;
+
+                  if (name === '') {
+                     showMessage('Bitte gib deinen Namen ein.', 'error');
+                     return;
+                  }
+
+                  try {
+                     console.log("fetching signups...");
+                     const response = await fetch('/signup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'name=' + encodeURIComponent(name)
+                        + '&status=' + status
+                     });
+
+                     if (response.ok) {
+                        localStorage.setItem('userName', name);
+                        showMessage('Anmeldung erfolgreich!', 'success');
+                        document.getElementById('name').value = '';
+                        await loadData();
+                     } else {
+                        showMessage('Fehler bei der Anmeldung.', 'error');
+                     }
+                  } catch (error) {
+                     console.log('Signup error:', error);
+                     showMessage('Verbindungsfehler.', 'error');
+                  }
+               });
+            });
+
+            function showMessage(text, type) {
+               const messageDiv = document.getElementById('message');
+               messageDiv.textContent = text;
+               messageDiv.className = 'message ' + type;
+            }
+
+            async function loadData() {
+               const savedName = localStorage.getItem('userName');
+               if (savedName) {
+                  document.getElementById('name').value = savedName;
+               }
+
+               try {
+                  const response = await fetch('/signup', { signal: AbortSignal.timeout(5000) });
+                  console.log('Received rseponse:', response);
+                  const data = await response.json();
+                  console.log('Received data:', data);
+                  if (data.paused) {
+                     document.getElementById('meet').innerHTML = data.message;
+                  } else {
+                     document.getElementById('date').innerHTML = formatDateForDisplay(data.date);
+
+                     const attendeeList = document.getElementById('attendeeList');
+                     const signupEntries = Object.entries(data.signups);
+                     if (signupEntries.length === 0) {
+                        attendeeList.innerHTML = '<p class="no-attendees">Noch keine Anmeldungen</p>';
+                     } else {
+                        attendeeList.innerHTML = signupEntries
+                           .map(([name, status]) => `<span class="attendee-name status-${status}">${name}</span>`)
+                           .join('');
+                     }
+                  }
+               } catch (error) {
+                  console.log('Load data error:', error);
+                  document.getElementById('attendeeList').innerHTML = 
+                     '<p class="error">Fehler beim Laden der Liste</p>';
+               }
+            }
+
+            function formatDateForDisplay(date) {
+               const year = date.substring(0, 4);
+               const month = date.substring(4, 6);
+               const day = date.substring(6, 8);
+               return `${day}.${month}.${year}`;
+            }
+
+            // Load attendees when page loads if we're on the meet section
+            document.addEventListener('DOMContentLoaded', function() {
+               const savedName = localStorage.getItem('userName');
+               if (savedName) {
+                  showSection('meet');
+               } else {
+                  showSection('welcome');
+               }
+            });
+         </script>
+   </body>
+</html>
