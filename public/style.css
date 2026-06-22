@@ -417,6 +417,12 @@ a:hover {
     transition: all 0.2s ease;
 }
 
+.comments-note {
+    font-size: 0.85em;
+    color: #999;
+    margin-bottom: 12px;
+}
+
 .delete-comment-btn:hover {
     border-color: #dc3545;
     color: #dc3545;
