@@ -3,6 +3,7 @@ const app = express();
 const PORT = 3000;
 const fs = require('fs').promises;
 const morgan = require('morgan');
+const Database = require('better-sqlite3');
 
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false }));
@@ -11,6 +12,21 @@ app.use(morgan('dev'));
 fs.mkdir('data', { recursive: true }).catch(err => {
    console.error('Failed to create data directory:', err);
 });
+
+const db = new Database('data/db.sqlite');
+db.exec(`
+   CREATE TABLE IF NOT EXISTS comments (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      name      TEXT    NOT NULL,
+      text      TEXT    NOT NULL,
+      timestamp INTEGER NOT NULL
+   )
+`);
+
+const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
+const TEN_MINUTES = 10 * 60 * 1000;
+const COMMENT_RATE_LIMIT = 10;
+const ipTimestamps = new Map();
 
 app.listen(PORT, () => {
    console.log(`Server listening on port ${PORT}`);
@@ -99,7 +115,7 @@ function getNextSundayDate() {
    }
    const nextSunday = new Date(now);
    nextSunday.setDate(now.getDate() + daysUntilSunday);
-   return nextSunday;  
+   return nextSunday;
 }
 
 function getNextSundayDisplayString() {
@@ -110,5 +126,42 @@ function getNextSundayInternalString() {
    return getNextSundayDate().toISOString().split('T')[0].replace(/-/g, '');
 }
 
+app.get('/comments', (req, res) => {
+   const cutoff = Date.now() - ONE_YEAR;
+   db.prepare('DELETE FROM comments WHERE timestamp < ?').run(cutoff);
+   const comments = db.prepare('SELECT id, name, text, timestamp FROM comments ORDER BY timestamp DESC').all();
+   res.json(comments);
+});
 
+app.post('/comments', (req, res) => {
+   const { name, text } = req.body;
+   if (!name || !text) return res.status(400).send('Missing fields');
+   if (name.length > 50) return res.status(400).send('Name too long');
+   if (text.length > 500) return res.status(400).send('Text too long');
+
+   const ip = req.ip;
+   const now = Date.now();
+   const recentCommentTimestamps = (ipTimestamps.get(ip) || []).filter(t => now - t < TEN_MINUTES);
+   if (recentCommentTimestamps.length >= COMMENT_RATE_LIMIT) return res.status(429).send('Zu viele Nachrichten auf einmal. Bitte warte etwas.');
+   recentCommentTimestamps.push(now);
+   ipTimestamps.set(ip, recentCommentTimestamps);
+
+   db.prepare('INSERT INTO comments (name, text, timestamp) VALUES (?, ?, ?)').run(name, text, now);
+   console.log(`[comment posted] ip=${ip} name=${name}`);
+   res.sendStatus(200);
+});
+
+app.delete('/comments/:id', (req, res) => {
+   const { name } = req.body;
+   const { id } = req.params;
+   if (!name) return res.status(400).send('Missing name');
+
+   const comment = db.prepare('SELECT name FROM comments WHERE id = ?').get(id);
+   if (!comment) return res.status(404).send('Not found');
+   if (comment.name !== name) return res.status(403).send('Forbidden');
+
+   db.prepare('DELETE FROM comments WHERE id = ?').run(id);
+   console.log(`[comment deleted] ip=${req.ip} name=${name} id=${id}`);
+   res.sendStatus(200);
+});
 
