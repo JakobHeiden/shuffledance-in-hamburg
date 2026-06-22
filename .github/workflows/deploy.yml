@@ -14,7 +14,9 @@ jobs:
           username: shuffle
           key: ${{ secrets.SHUFFLE_DEPLOY_KEY }}
           script: |
+            set -e
             cd /srv/shuffle
-            git pull
+            git fetch origin master
+            git reset --hard origin/master
             npm ci
             sudo systemctl restart shuffle
