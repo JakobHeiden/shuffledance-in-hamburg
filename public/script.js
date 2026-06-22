@@ -103,7 +103,7 @@ async function loadComments() {
    try {
       const response = await fetch('/comments', { signal: AbortSignal.timeout(5000) });
       const comments = await response.json();
-      const list = document.getElementById('commentSection');
+      const list = document.getElementById('comments');
       if (comments.length === 0) {
          list.innerHTML = '<p class="no-attendees">Noch keine Kommentare</p>';
       } else {
@@ -124,7 +124,7 @@ async function loadComments() {
       }
    } catch (error) {
       console.log('Load comments error:', error);
-      document.getElementById('commentSection').innerHTML = '<p class="error">Fehler beim Laden der Kommentare</p>';
+      document.getElementById('comments').innerHTML = '<p class="error">Fehler beim Laden der Kommentare</p>';
    }
 }
 
