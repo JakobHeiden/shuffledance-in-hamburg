@@ -4,9 +4,11 @@ const PORT = 3000;
 const fs = require('fs').promises;
 const morgan = require('morgan');
 const Database = require('better-sqlite3');
+const crypto = require('crypto');
 
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 app.use(morgan('dev'));
 
 fs.mkdir('data', { recursive: true }).catch(err => {
@@ -22,6 +24,25 @@ db.exec(`
       timestamp INTEGER NOT NULL
    )
 `);
+db.exec(`
+   CREATE TABLE IF NOT EXISTS members (
+      token      TEXT PRIMARY KEY,
+      name       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+   )
+`);
+db.exec(`
+   CREATE TABLE IF NOT EXISTS config (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+   )
+`);
+const existingRegToken = db.prepare("SELECT value FROM config WHERE key='registration_token'").get();
+if (!existingRegToken) {
+   const token = crypto.randomBytes(24).toString('hex');
+   db.prepare("INSERT INTO config (key, value) VALUES ('registration_token', ?)").run(token);
+   console.log(`[bootstrap] registration_token=${token}`);
+}
 
 const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
