@@ -186,3 +186,28 @@ app.delete('/comments/:id', (req, res) => {
    res.sendStatus(200);
 });
 
+app.post('/register', (req, res) => {
+   const { registrationToken, name } = req.body;
+
+   const regRow = db.prepare("SELECT value FROM config WHERE key='registration_token'").get();
+   if (!registrationToken || registrationToken !== regRow.value) {
+      return res.status(401).send('Ungültiger Zugangscode');
+   }
+   if (!name || typeof name !== 'string' || name.length > 50) {
+      return res.status(400).send('Name fehlt oder zu lang');
+   }
+
+   const token = crypto.randomBytes(24).toString('hex');
+   try {
+      db.prepare('INSERT INTO members (token, name, created_at) VALUES (?, ?, ?)')
+         .run(token, name, Date.now());
+   } catch (err) {
+      if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+         return res.status(409).send('Name schon vergeben, nimm einen anderen');
+      }
+      throw err;
+   }
+   console.log(`[member registered] name=${name}`);
+   res.json({ token });
+});
+
