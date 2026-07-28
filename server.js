@@ -211,3 +211,17 @@ app.post('/register', (req, res) => {
    res.json({ token });
 });
 
+function requireMember(req, res, next) {
+   const header = req.get('authorization') || '';
+   const match = header.match(/^Bearer (.+)$/);
+   if (!match) return res.status(401).send('Nicht angemeldet');
+   const member = db.prepare('SELECT name FROM members WHERE token = ?').get(match[1]);
+   if (!member) return res.status(401).send('Nicht angemeldet');
+   req.member = member;
+   next();
+}
+
+app.get('/api/me', requireMember, (req, res) => {
+   res.json({ name: req.member.name });
+});
+
