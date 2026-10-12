@@ -69,6 +69,7 @@ async function loadData() {
          document.getElementById('meet').innerHTML = data.message;
       } else {
          document.getElementById('date').innerHTML = formatDateForDisplay(data.date);
+         document.getElementById('specialMessage').textContent = data.specialMessage;
 
          const attendeeList = document.getElementById('attendeeList');
          const signupEntries = Object.entries(data.signups);

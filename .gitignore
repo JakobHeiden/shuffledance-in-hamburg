@@ -5,3 +5,4 @@ node_modules/
 data/
 .idea/
 shufflehamburg.iml
+settings.json

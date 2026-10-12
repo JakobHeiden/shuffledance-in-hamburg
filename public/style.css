@@ -200,6 +200,15 @@ h1 {
     color: #495057;
 }
 
+.special-message {
+    color: red;
+    font-weight: bold;
+}
+
+.special-message:empty {
+    display: none;
+}
+
 /* Message styles */
 .message {
     margin-top: 15px;

@@ -51,19 +51,37 @@ app.post('/signup', async (req, res) => {
 });
 
 app.get('/signup', async (req, res) => {
-   let response;
-   try {// signups paused
-      const pauseContent = await fs.readFile('public/pause.html', 'utf8');
-      response = res.json({ paused: true, message: pauseContent });
-   } catch (err) {// signups not paused
-      res.json({
-      paused: false,
-      date: getNextSundayInternalString(),
-      signups: await readSignups()
-   });
+   try {
+      const settings = await readSettings();
+      if (settings.isPause) {
+         const pauseContent = await fs.readFile('public/pause.html', 'utf8');
+         res.json({ paused: true, message: pauseContent });
+      } else {
+         res.json({
+            paused: false,
+            date: getNextSundayInternalString(),
+            signups: await readSignups(),
+            specialMessage: settings.specialMessage
+         });
+      }
+   } catch (err) {
+      console.error('GET /signup error:', err);
+      res.status(500).send('ERROR');
    }
-
 });
+
+async function readSettings() {
+   let content;
+   try {
+      content = await fs.readFile('settings.json', 'utf8');
+   } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      console.log('settings.json not found, creating it from settings.template.json');
+      await fs.copyFile('settings.template.json', 'settings.json');
+      content = await fs.readFile('settings.json', 'utf8');
+   }
+   return JSON.parse(content);
+}
 
 function validatePostBody(name, status) {
    if (!name || !status) {
