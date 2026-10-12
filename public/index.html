@@ -41,7 +41,7 @@
                   <p>Trag dich hier ein, damit wir wissen wer kommt:</p>
 
                   <div class="form-group">
-                     <input type="text" id="name" name="name" placeholder="Dein Name" required maxlength="50">
+                     <input type="text" id="name" name="name" aria-label="Dein Name" placeholder="Dein Name" required maxlength="50">
                   </div>
 
                   <p>Ich komme...</p>
@@ -61,8 +61,8 @@
             <section id="commentSection" class="content-section">
                <h2>Kommentare</h2>
                <div class="comment-form">
-                  <input type="text" id="comment-name" placeholder="Dein Name" maxlength="50">
-                  <textarea id="comment-text" placeholder="Dein Kommentar" maxlength="3000" rows="4"></textarea>
+                  <input type="text" id="comment-name" aria-label="Dein Name" placeholder="Dein Name" maxlength="50">
+                  <textarea id="comment-text" aria-label="Dein Kommentar" placeholder="Dein Kommentar" maxlength="3000" rows="4"></textarea>
                   <button type="button" id="comment-submit">Abschicken</button>
                   <div id="comment-message" class="message"></div>
                </div>
