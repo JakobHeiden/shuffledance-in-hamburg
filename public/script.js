@@ -184,10 +184,23 @@ function escapeHtml(str) {
    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+async function hasRecentCommentByOthers(ownName) {
+   try {
+      const response = await fetch('/comments', { signal: AbortSignal.timeout(5000) });
+      const comments = await response.json();
+      return comments.some(comment => comment.name !== ownName && Date.now() - comment.timestamp < SEVEN_DAYS);
+   } catch (error) {
+      console.log('Recent comment check error:', error);
+      return false;
+   }
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
    const savedName = localStorage.getItem('userName');
    if (savedName) {
-      showSection('meet');
+      showSection(await hasRecentCommentByOthers(savedName) ? 'commentSection' : 'meet');
    } else {
       showSection('welcome');
    }
