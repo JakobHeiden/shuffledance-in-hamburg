@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="referrer" content="no-referrer">
+      <title>Registrieren – Wir schaffen Shuffle</title>
+      <link rel="stylesheet" href="style.css">
+   </head>
+   <body>
+      <div class="container">
+         <header>
+            <h1>Shuffledance in Hamburg</h1>
+            <p class="tagline">Wir schaffen Shuffle</p>
+         </header>
+
+         <main>
+            <section class="content-section active">
+               <h2>Registrieren</h2>
+               <p>Leg dir ein Konto an. Statt eines Passworts nutzt du einen Passkey (Fingerabdruck, Gesichtserkennung oder PIN deines Geräts).</p>
+               <div class="form-group">
+                  <input type="text" id="name" aria-label="Dein Name" placeholder="Dein Name" maxlength="50">
+                  <button type="button" id="register-btn">Registrieren</button>
+               </div>
+               <div id="message" class="message"></div>
+            </section>
+         </main>
+      </div>
+
+      <script src="vendor/simplewebauthn-browser.js"></script>
+      <script src="register.js"></script>
+   </body>
+</html>

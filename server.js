@@ -2,26 +2,26 @@ const express = require('express');
 const app = express();
 const PORT = 3000;
 const fs = require('fs').promises;
+const fsSync = require('fs');
+const path = require('path');
 const morgan = require('morgan');
-const Database = require('better-sqlite3');
+const cookieParser = require('cookie-parser');
+const { db, importTextSignups } = require('./db');
+const createAuth = require('./auth');
+
+importTextSignups();
+
+// Auth settings are read once on startup; changes need a restart.
+const { optionalAuth, validateName, router: authRouter } = createAuth(readSettingsSync());
 
 app.use(express.static('public'));
-app.use(express.urlencoded({ extended: false }));
-app.use(morgan('dev'));
-
-fs.mkdir('data', { recursive: true }).catch(err => {
-   console.error('Failed to create data directory:', err);
+app.get('/vendor/simplewebauthn-browser.js', (req, res) => {
+   res.sendFile(path.join(__dirname, 'node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js'));
 });
-
-const db = new Database('data/db.sqlite');
-db.exec(`
-   CREATE TABLE IF NOT EXISTS comments (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      name      TEXT    NOT NULL,
-      text      TEXT    NOT NULL,
-      timestamp INTEGER NOT NULL
-   )
-`);
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(morgan('dev'));
+app.use('/api', authRouter);
 
 const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;
 const TEN_MINUTES = 10 * 60 * 1000;
@@ -32,17 +32,32 @@ app.listen(PORT, () => {
    console.log(`Server listening on port ${PORT}`);
 });
 
-app.post('/signup', async (req, res) => {
-   const { name, status } = req.body;
-
-   const error = validatePostBody(name, status);
-   if (error) {
-      console.log(`invalid post body: ${error}`);
-      return res.status(400).send(error);
+app.post('/signup', optionalAuth, (req, res) => {
+   const { status, guestId } = req.body;
+   if (!['ja', 'vielleicht', 'nein'].includes(status)) {
+      return res.status(400).send('Invalid status');
    }
 
+   const date = getNextSundayInternalString();
+   const now = Date.now();
    try {
-      await writeSignup(name, status);
+      if (req.user) {
+         db.prepare(`
+            INSERT INTO signups (date, user_id, name, status, updated) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (date, user_id) WHERE user_id IS NOT NULL
+            DO UPDATE SET name = excluded.name, status = excluded.status, updated = excluded.updated`)
+            .run(date, req.user.id, req.user.name, status, now);
+      } else {
+         const name = validateName(req.body.name);
+         if (!name || typeof guestId !== 'string' || !guestId || guestId.length > 100) {
+            return res.status(400).send('Missing fields');
+         }
+         db.prepare(`
+            INSERT INTO signups (date, guest_id, name, status, updated) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (date, guest_id) WHERE guest_id IS NOT NULL
+            DO UPDATE SET name = excluded.name, status = excluded.status, updated = excluded.updated`)
+            .run(date, guestId, name, status, now);
+      }
       res.sendStatus(200);
    } catch (err) {
       console.error('POST /signup error:', err);
@@ -60,7 +75,7 @@ app.get('/signup', async (req, res) => {
          res.json({
             paused: false,
             date: getNextSundayInternalString(),
-            signups: await readSignups(),
+            signups: readSignups(),
             specialMessage: settings.specialMessage
          });
       }
@@ -83,43 +98,17 @@ async function readSettings() {
    return JSON.parse(content);
 }
 
-function validatePostBody(name, status) {
-   if (!name || !status) {
-      return 'Missing fields';
+function readSettingsSync() {
+   if (!fsSync.existsSync('settings.json')) {
+      console.log('settings.json not found, creating it from settings.template.json');
+      fsSync.copyFileSync('settings.template.json', 'settings.json');
    }
-   if (!['ja', 'vielleicht', 'nein'].includes(status)) {
-      return 'Invalid status';
-   }
-
-   return null;
+   return JSON.parse(fsSync.readFileSync('settings.json', 'utf8'));
 }
 
-async function readSignups() {
-   const date = getNextSundayInternalString();
-   const filename = `data/${date}.txt`;
-   let fileContent;
-   const signups = {};
-   try {
-      fileContent = await fs.readFile(filename, 'utf8');
-   } catch (err) {
-      return signups;
-   }
-
-   fileContent.trim().split('\n')
-      .map(line => line.split(','))
-      .forEach(([name, status]) => signups[name] = status);
-   return signups;
-}
-
-async function writeSignup(name, status) {
-   const date = getNextSundayInternalString();
-   const filename = `data/${date}.txt`;
-   try {
-      await fs.appendFile(filename, `${name},${status}\n`);
-   } catch (err) {
-      console.error('Failed to write signup:', err);
-      throw new Error('Could not save signup');
-   }
+function readSignups() {
+   return db.prepare('SELECT name, status FROM signups WHERE date = ? ORDER BY updated')
+      .all(getNextSundayInternalString());
 }
 
 function getNextSundayDate() {

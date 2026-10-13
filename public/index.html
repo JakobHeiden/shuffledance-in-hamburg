@@ -11,6 +11,12 @@
          <header>
             <h1>Shuffledance in Hamburg</h1>
             <p class="tagline">Wir schaffen Shuffle</p>
+            <div id="auth-bar" class="auth-bar">
+               <span id="auth-user" hidden></span>
+               <button type="button" id="logout-btn" class="auth-btn" hidden>Abmelden</button>
+               <button type="button" id="login-btn" class="auth-btn" hidden>Anmelden</button>
+            </div>
+            <div id="auth-message" class="message"></div>
          </header>
 
          <nav class="nav-buttons">
@@ -18,6 +24,7 @@
             <button id="meet-btn" class="nav-btn" onclick="showSection('meet')">Nächstes Treffen</button>
             <button id="commentSection-btn" class="nav-btn" onclick="showSection('commentSection')">Kommentare</button>
             <button id="links-btn" class="nav-btn" onclick="showSection('links')">Links</button>
+            <button id="private-btn" class="nav-btn" onclick="showSection('private')" hidden>Intern</button>
          </nav>
 
          <main>
@@ -40,7 +47,8 @@
                   <h3>Anmeldung</h3>
                   <p>Trag dich hier ein, damit wir wissen wer kommt:</p>
 
-                  <div class="form-group">
+                  <p id="member-name" hidden></p>
+                  <div id="guest-name-group" class="form-group">
                      <input type="text" id="name" name="name" aria-label="Dein Name" placeholder="Dein Name" required maxlength="50">
                   </div>
 
@@ -75,9 +83,15 @@
                <p><a href="https://vanessashuffle.my.canva.site/">Shufflekurse bei Vanessa (Hamburg und Schleswig-Holstein)</a></p>
                <p><a href="https://annashuffle.de/">Shufflekurse bei Anna (online und diverse Städte)</a></p>
             </section>
+
+            <section id="private" class="content-section">
+               <h2>Intern</h2>
+               <div id="private-content"></div>
+            </section>
          </main>
       </div>
 
+      <script src="vendor/simplewebauthn-browser.js"></script>
       <script src="script.js"></script>
    </body>
 </html>

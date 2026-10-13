@@ -12,6 +12,96 @@ function showSection(sectionName) {
    if (sectionName === 'commentSection') {
       loadComments();
    }
+   if (sectionName === 'private') {
+      loadPrivate();
+   }
+}
+
+let currentUser = null;
+
+function getGuestId() {
+   let guestId = localStorage.getItem('guestId');
+   if (!guestId) {
+      guestId = crypto.randomUUID();
+      localStorage.setItem('guestId', guestId);
+   }
+   return guestId;
+}
+
+async function loadMe() {
+   try {
+      const response = await fetch('/api/me', { signal: AbortSignal.timeout(5000) });
+      currentUser = response.ok ? await response.json() : null;
+   } catch (error) {
+      console.log('Load user error:', error);
+      currentUser = null;
+   }
+   if (currentUser) {
+      localStorage.setItem('userName', currentUser.name);
+   }
+   renderAuthState();
+}
+
+function renderAuthState() {
+   const loggedIn = currentUser !== null;
+   document.getElementById('auth-user').hidden = !loggedIn;
+   document.getElementById('auth-user').textContent = loggedIn ? 'Angemeldet als ' + currentUser.name : '';
+   document.getElementById('logout-btn').hidden = !loggedIn;
+   document.getElementById('login-btn').hidden = loggedIn;
+   document.getElementById('private-btn').hidden = !loggedIn;
+   document.getElementById('member-name').hidden = !loggedIn;
+   document.getElementById('member-name').textContent = loggedIn ? 'Angemeldet als ' + currentUser.name : '';
+   document.getElementById('guest-name-group').hidden = loggedIn;
+}
+
+function showAuthMessage(text, type) {
+   const el = document.getElementById('auth-message');
+   el.textContent = text;
+   el.className = 'message ' + type;
+}
+
+document.getElementById('login-btn').addEventListener('click', async function() {
+   showAuthMessage('', '');
+   try {
+      const optionsResponse = await fetch('/api/login/options', { method: 'POST' });
+      if (!optionsResponse.ok) throw new Error(await optionsResponse.text());
+      const optionsJSON = await optionsResponse.json();
+      const response = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON });
+      const verifyResponse = await fetch('/api/login/verify', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ response })
+      });
+      if (!verifyResponse.ok) throw new Error(await verifyResponse.text());
+      location.reload();
+   } catch (error) {
+      console.log('Login error:', error);
+      if (error.name === 'NotAllowedError') return; // user cancelled
+      showAuthMessage('Anmeldung fehlgeschlagen. ' + error.message, 'error');
+   }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async function() {
+   await fetch('/api/logout', { method: 'POST' });
+   location.reload();
+});
+
+async function loadPrivate() {
+   const container = document.getElementById('private-content');
+   try {
+      const response = await fetch('/api/private', { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error(response.status);
+      const data = await response.json();
+      const p = document.createElement('p');
+      p.textContent = data.content;
+      container.replaceChildren(p);
+   } catch (error) {
+      console.log('Load private error:', error);
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = 'Fehler beim Laden';
+      container.replaceChildren(p);
+   }
 }
 
 document.querySelectorAll('.signup-btn').forEach(btn => {
@@ -19,9 +109,14 @@ document.querySelectorAll('.signup-btn').forEach(btn => {
       const name = document.getElementById('name').value.trim();
       const status = this.dataset.status;
 
-      if (name === '') {
+      if (!currentUser && name === '') {
          showMessage('Bitte gib deinen Namen ein.', 'error');
          return;
+      }
+
+      let body = 'status=' + status;
+      if (!currentUser) {
+         body += '&name=' + encodeURIComponent(name) + '&guestId=' + encodeURIComponent(getGuestId());
       }
 
       try {
@@ -29,12 +124,11 @@ document.querySelectorAll('.signup-btn').forEach(btn => {
          const response = await fetch('/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'name=' + encodeURIComponent(name)
-            + '&status=' + status
+            body
          });
 
          if (response.ok) {
-            localStorage.setItem('userName', name);
+            if (!currentUser) localStorage.setItem('userName', name);
             showMessage('Anmeldung erfolgreich!', 'success');
             document.getElementById('name').value = '';
             await loadData();
@@ -72,13 +166,15 @@ async function loadData() {
          document.getElementById('specialMessage').textContent = data.specialMessage;
 
          const attendeeList = document.getElementById('attendeeList');
-         const signupEntries = Object.entries(data.signups);
-         if (signupEntries.length === 0) {
+         if (data.signups.length === 0) {
             attendeeList.innerHTML = '<p class="no-attendees">Noch keine Anmeldungen</p>';
          } else {
-            attendeeList.innerHTML = signupEntries
-               .map(([name, status]) => `<span class="attendee-name status-${status}">${name}</span>`)
-               .join('');
+            attendeeList.replaceChildren(...data.signups.map(({ name, status }) => {
+               const span = document.createElement('span');
+               span.className = 'attendee-name status-' + status;
+               span.textContent = name;
+               return span;
+            }));
          }
       }
    } catch (error) {
@@ -199,6 +295,7 @@ async function hasRecentCommentByOthers(ownName) {
 }
 
 document.addEventListener('DOMContentLoaded', async function() {
+   await loadMe();
    const savedName = localStorage.getItem('userName');
    if (savedName) {
       showSection(await hasRecentCommentByOthers(savedName) ? 'commentSection' : 'meet');

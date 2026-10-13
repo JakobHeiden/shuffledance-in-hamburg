@@ -1,4 +1,7 @@
 {
    "isPause": false,
-   "specialMessage": ""
+   "specialMessage": "",
+   "registrationToken": "CHANGE-ME-to-a-long-random-string",
+   "rpID": "localhost",
+   "origins": ["http://localhost:3000"]
 }
