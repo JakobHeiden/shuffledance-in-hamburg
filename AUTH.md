@@ -113,7 +113,7 @@ Registration never happens on GET, because WhatsApp fetches shared links for pre
 
 ### Login
 
-1. "Anmelden" button → `POST /api/login/options` → options with empty `allowCredentials` (discoverable credentials, no username needed).
+1. "Login" button → `POST /api/login/options` → options with empty `allowCredentials` (discoverable credentials, no username needed).
 2. Browser signs (`startAuthentication`). Cross-device (QR code via phone) is handled by the browser.
 3. `POST /api/login/verify` → server finds passkey by credential ID, verifies, updates `counter`, creates session.
 
@@ -181,7 +181,7 @@ Each signup is identified by `user_id` (members) or `guest_id` (guests), never b
 
 ## Frontend (index.html)
 
-- On load, `fetch('/api/me')`. If `200`: show user name, logout button, and the "Intern" nav button. If `401`: show the "Anmelden" button only.
+- On load, `fetch('/api/me')`. If `200`: show user name, "Logout" button, and the "Intern" nav button. If `401`: show the "Login" button only.
 - Private section content comes from `/api/private`. It must not be in `index.html`, since static files are public.
 
 ## Rendering user content
